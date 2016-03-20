@@ -30,3 +30,14 @@ define Profile/ARV7519RW22
 endef
 
 $(eval $(call Profile,ARV7519RW22))
+
+define Profile/VGV952CJW33
+  NAME:=EasyBox 904 xDSL - VGV952CJW33-E-IR
+# PACKAGES:=kmod-ath9k wpad-mini kmod-usb-dwc2		# Don't know yet how to access wlan hardware
+  PACKAGES:=wpad-mini kmod-usb-dwc2
+endef
+
+VGV952CJW33_UBIFS_OPTS:="-m 2048 -e 126KiB -c 4096"
+VGV952CJW33_UBI_OPTS:="-m 2048 -p 128KiB -s 512"
+
+$(eval $(call Profile,VGV952CJW33))

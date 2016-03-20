@@ -88,6 +88,7 @@ define Image/BuildNAND/squashfs
 ifneq ($($(PROFILE)_UBI_OPTS),)
 	$(call prepare_generic_squashfs,$(KDIR)/root.$(1))
 	$(call Image/Build/UbinizeImage,$(PROFILE),,squashfs,$($(PROFILE)_UBI_OPTS))
+	$(CP) "$(KDIR)/$(IMG_PREFIX)-$(PROFILE)-squashfs-ubinized.bin" "$(BIN_DIR)/"
 	$(call Image/Build/SysupgradeNAND,$(PROFILE),$(1),$(KDIR)/uImage-$(PROFILE))
 endif
 endef
@@ -432,6 +433,9 @@ Image/Build/Profile/VGV7519NOR=$(call Image/Build/$(1),$(1),VGV7519NOR)
 
 Image/BuildKernel/Profile/VGV7519BRN=$(call Image/BuildKernel/Template,VGV7519BRN,$(1))
 Image/Build/Profile/VGV7519BRN=$(call Image/Build/$(1),$(1),VGV7519BRN,5D00008000,0x12345678,$(1))
+
+Image/BuildKernel/Profile/VGV952CJW33=$(call Image/BuildKernel/Template,VGV952CJW33)
+Image/Build/Profile/VGV952CJW33=$(call Image/BuildNAND/$(1),$(1),VGV952CJW33)
 
 endif
 
