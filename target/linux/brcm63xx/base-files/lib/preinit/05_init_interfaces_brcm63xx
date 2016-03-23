@@ -16,12 +16,14 @@ set_preinit_iface() {
 	dgnd3700v1_dgnd3800b |\
 	dsl-2640b-b |\
 	dsl-274xb-c |\
+	dsl-274xb-f |\
 	dsl-275xb-d |\
 	fast2504n |\
 	fast2704v2 |\
 	hg553 |\
 	hg556a_* |\
 	hg520 |\
+	hg622 |\
 	neufbox6 |\
 	p870hw-51a_v2 |\
 	rta770bw |\
@@ -31,6 +33,7 @@ set_preinit_iface() {
 	v2110 |\
 	vr-3025un |\
 	vr-3025u |\
+	vr-3026e |\
 	wap-5813n)
 		ifname=eth0
 		;;

@@ -1,4 +1,4 @@
-# 
+#
 # Copyright (C) 2006-2013 OpenWrt.org
 #
 # This is free software, licensed under the GNU General Public License v2.
@@ -24,6 +24,7 @@ define Build/Compile
 endef
 
 define Image/Prepare
+	cp $(LINUX_DIR)/arch/arm/boot/Image $(KDIR)/Image
 	cp $(LINUX_DIR)/arch/arm/boot/zImage $(KDIR)/zImage
 endef
 
@@ -75,7 +76,6 @@ define Image/Build/Kernel/Default
 	$(call Image/Build/Kernel/AT91SAM9M10G45EK)
 	$(call Image/Build/Kernel/AT91SAM9X25EK)
 	$(call Image/Build/Kernel/AT91SAM9X35EK)
-	$(call Image/Build/Kernel/AT91SAMA5D3XPLAINED)
 	$(call Image/Build/Kernel/LMU5000)
 	$(call Image/Build/Kernel/TNYA9260)
 	$(call Image/Build/Kernel/TNYA9263)
@@ -89,9 +89,9 @@ endef
 
 define Image/BuildKernel
 	mkimage -A arm -T kernel -C none -a 0x20008000 -e 0x20008000 -n linux-2.6 \
-		-d $(LINUX_DIR)/arch/arm/boot/Image $(BIN_DIR)/uImage
+		-d $(KDIR)/Image $(BIN_DIR)/$(IMG_PREFIX)-uImage
 	if [ $(CONFIG_FLEXIBITY_ROOT) ]; then \
-		$(INSTALL_BIN) $(BIN_DIR)/uImage $(TARGET_DIR)/uImage ; \
+		$(INSTALL_BIN) $(BIN_DIR)/$(IMG_PREFIX)-uImage $(TARGET_DIR)/uImage ; \
 	fi
 	$(call Image/Build/Kernel/$(PROFILE))
 endef

@@ -29,6 +29,7 @@ $(eval $(call KernelPackage,fs-fscache))
 define KernelPackage/fs-afs
   SUBMENU:=$(FS_MENU)
   TITLE:=Andrew FileSystem client
+  DEFAULT:=n
   DEPENDS:=+kmod-rxrpc +kmod-dnsresolver +kmod-fs-fscache
   KCONFIG:=\
 	CONFIG_AFS_FS=m \
@@ -90,7 +91,6 @@ define KernelPackage/fs-cifs
   AUTOLOAD:=$(call AutoLoad,30,cifs)
   $(call AddDepends/nls)
   DEPENDS+= \
-    +kmod-crypto-arc4 \
     +kmod-crypto-hmac \
     +kmod-crypto-md5 \
     +kmod-crypto-md4 \
@@ -155,15 +155,18 @@ $(eval $(call KernelPackage,fs-exportfs))
 define KernelPackage/fs-ext4
   SUBMENU:=$(FS_MENU)
   TITLE:=EXT4 filesystem support
+  DEPENDS := \
+    +kmod-lib-crc16 \
+    +kmod-crypto-hash
   KCONFIG:= \
 	CONFIG_EXT4_FS \
+	CONFIG_EXT4_ENCRYPTION=n \
 	CONFIG_JBD2
   FILES:= \
 	$(LINUX_DIR)/fs/ext4/ext4.ko \
 	$(LINUX_DIR)/fs/jbd2/jbd2.ko \
 	$(LINUX_DIR)/fs/mbcache.ko
   AUTOLOAD:=$(call AutoLoad,30,mbcache jbd2 ext4,1)
-  $(call AddDepends/crc16, +kmod-crypto-hash)
 endef
 
 define KernelPackage/fs-ext4/description
@@ -317,12 +320,12 @@ define KernelPackage/fs-nfs-common
   KCONFIG:= \
 	CONFIG_LOCKD \
 	CONFIG_SUNRPC \
-	CONFIG_GRACE_PERIOD@ge3.18
+	CONFIG_GRACE_PERIOD
   FILES:= \
 	$(LINUX_DIR)/fs/lockd/lockd.ko \
 	$(LINUX_DIR)/net/sunrpc/sunrpc.ko \
-	$(LINUX_DIR)/fs/nfs_common/grace.ko@ge3.18
-  AUTOLOAD:=$(call AutoLoad,30,grace@ge3.18 sunrpc lockd)
+	$(LINUX_DIR)/fs/nfs_common/grace.ko
+  AUTOLOAD:=$(call AutoLoad,30,grace sunrpc lockd)
 endef
 
 $(eval $(call KernelPackage,fs-nfs-common))

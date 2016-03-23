@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2006-2014 OpenWrt.org
+# Copyright (C) 2006-2015 OpenWrt.org
 #
 # This is free software, licensed under the GNU General Public License v2.
 # See /LICENSE for more information.
@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ncurses
 PKG_VERSION:=5.9
-PKG_RELEASE:=1
+PKG_RELEASE:=3
 
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(BUILD_VARIANT)/$(PKG_NAME)-$(PKG_VERSION)
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
@@ -91,6 +91,7 @@ endif
 ifeq ($(BUILD_VARIANT),libncursesw)
 	CONFIGURE_ARGS += \
 		--enable-widec \
+		--includedir="/usr/include/ncursesw" \
 		--with-build-cppflags=-D_GNU_SOURCE
 endif
 
@@ -138,7 +139,7 @@ endef
 ifeq ($(BUILD_VARIANT),libncursesw)
 define Build/InstallDev
 	$(INSTALL_DIR) $(1)/usr/include/ncursesw/
-	$(CP) $(PKG_INSTALL_DIR)/usr/include/*.h $(1)/usr/include/ncursesw/
+	$(CP) $(PKG_INSTALL_DIR)/usr/include/ncursesw/*.h $(1)/usr/include/ncursesw/
 
 	$(INSTALL_DIR) $(1)/usr/lib
 	$(CP) $(PKG_INSTALL_DIR)/usr/lib/lib{ncurses,panel,menu,form}w.{a,so*} $(1)/usr/lib/
@@ -147,7 +148,7 @@ define Build/InstallDev
 	$(CP) $(PKG_INSTALL_DIR)/usr/bin/ncursesw5-config $(2)/bin/
 	$(SED) 's,^\(prefix\|exec_prefix\)=.*,\1=$(STAGING_DIR)/usr,g' -e 's/$$$$INCS //g' \
 		$(2)/bin/ncursesw5-config
-	$(LN) $(2)/bin/ncursesw5-config $(1)/usr/bin/ncursesw5-config
+	ln -sf $(STAGING_DIR)/host/bin/ncursesw5-config $(1)/usr/bin/ncursesw5-config
 endef
 else
 define Build/InstallDev
@@ -161,7 +162,7 @@ define Build/InstallDev
 	$(CP) $(PKG_INSTALL_DIR)/usr/bin/ncurses5-config $(2)/bin/
 	$(SED) 's,^\(prefix\|exec_prefix\)=.*,\1=$(STAGING_DIR)/usr,g' \
 		$(2)/bin/ncurses5-config
-	$(LN) $(2)/bin/ncurses5-config $(1)/usr/bin/ncurses5-config
+	ln -sf $(STAGING_DIR)/host/bin/ncurses5-config $(1)/usr/bin/ncurses5-config
 endef
 endif
 

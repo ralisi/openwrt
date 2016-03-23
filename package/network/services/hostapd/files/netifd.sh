@@ -1,3 +1,5 @@
+. /lib/functions/network.sh
+
 wpa_supplicant_add_rate() {
 	local var="$1"
 	local val="$(($2 / 1000))"
@@ -120,6 +122,7 @@ hostapd_common_add_bss_config() {
 
 	config_add_boolean rsn_preauth auth_cache
 	config_add_int ieee80211w
+	config_add_int eapol_version
 
 	config_add_string 'auth_server:host' 'server:host'
 	config_add_string auth_secret
@@ -140,6 +143,7 @@ hostapd_common_add_bss_config() {
 
 	config_add_int dynamic_vlan vlan_naming
 	config_add_string vlan_tagged_interface vlan_bridge
+	config_add_string vlan_file
 
 	config_add_string 'key1:wepkey' 'key2:wepkey' 'key3:wepkey' 'key4:wepkey' 'password:wpakey'
 
@@ -182,7 +186,7 @@ hostapd_set_bss_options() {
 		wps_pushbutton wps_label ext_registrar wps_pbc_in_m1 \
 		wps_device_type wps_device_name wps_manufacturer wps_pin \
 		macfilter ssid wmm uapsd hidden short_preamble rsn_preauth \
-		iapp_interface
+		iapp_interface eapol_version
 
 	set_default isolate 0
 	set_default maxassoc 0
@@ -192,6 +196,7 @@ hostapd_set_bss_options() {
 	set_default hidden 0
 	set_default wmm 1
 	set_default uapsd 1
+	set_default eapol_version 0
 
 	append bss_conf "ctrl_interface=/var/run/hostapd"
 	if [ "$isolate" -gt 0 ]; then
@@ -237,6 +242,8 @@ hostapd_set_bss_options() {
 				[ -e "$wpa_psk_file" ] || touch "$wpa_psk_file"
 				append bss_conf "wpa_psk_file=$wpa_psk_file" "$N"
 			}
+			[ "$eapol_version" -ge "1" -a "$eapol_version" -le "2" ] && append bss_conf "eapol_version=$eapol_version" "$N"
+
 			wps_possible=1
 			append wpa_key_mgmt "WPA-PSK"
 		;;
@@ -248,7 +255,7 @@ hostapd_set_bss_options() {
 				ownip \
 				eap_reauth_period dynamic_vlan \
 				vlan_naming vlan_tagged_interface \
-				vlan_bridge
+				vlan_bridge vlan_file
 
 			# legacy compatibility
 			[ -n "$auth_server" ] || json_get_var auth_server server
@@ -291,7 +298,13 @@ hostapd_set_bss_options() {
 					append bss_conf "vlan_bridge=$vlan_bridge" "$N"
 				[ -n "$vlan_tagged_interface" ] && \
 					append bss_conf "vlan_tagged_interface=$vlan_tagged_interface" "$N"
+				[ -n "$vlan_file" ] && {
+					[ -e "$vlan_file" ] || touch "$vlan_file"
+					append bss_conf "vlan_file=$vlan_file" "$N"
+				}
 			}
+
+			[ "$eapol_version" -ge "1" -a "$eapol_version" -le "2" ] && append bss_conf "eapol_version=$eapol_version" "$N"
 		;;
 		wep)
 			local wep_keyidx=0
@@ -340,12 +353,14 @@ hostapd_set_bss_options() {
 	append bss_conf "ssid=$ssid" "$N"
 	[ -n "$network_bridge" ] && append bss_conf "bridge=$network_bridge" "$N"
 	[ -n "$iapp_interface" ] && {
-		iapp_interface="$(uci_get_state network "$iapp_interface" ifname "$iapp_interface")"
-		[ -n "$iapp_interface" ] && append bss_conf "iapp_interface=$iapp_interface" "$N"
+		local ifname
+		network_get_device ifname "$iapp_interface" || ifname = "$iapp_interface"
+		append bss_conf "iapp_interface=$ifname" "$N"
 	}
 
 	if [ "$wpa" -ge "1" ]; then
 		json_get_vars nasid ieee80211r
+		set_default ieee80211r 0
 		[ -n "$nasid" ] && append bss_conf "nas_identifier=$nasid" "$N"
 
 		if [ "$ieee80211r" -gt "0" ]; then
@@ -521,9 +536,15 @@ wpa_supplicant_prepare_interface() {
 		_w_modestr="mode=1"
 	}
 
+	local country_str=
+	[ -n "$country" ] && {
+		country_str="country=$country"
+	}
+
 	wpa_supplicant_teardown_interface "$ifname"
 	cat > "$_config" <<EOF
 $ap_scan
+$country_str
 EOF
 	return 0
 }
@@ -537,7 +558,9 @@ wpa_supplicant_add_network() {
 	json_get_vars \
 		ssid bssid key \
 		basic_rate mcast_rate \
-		ieee80211w
+		ieee80211w ieee80211r
+
+	set_default ieee80211r 0
 
 	local key_mgmt='NONE'
 	local enc_str=
@@ -545,8 +568,10 @@ wpa_supplicant_add_network() {
 	local T="	"
 
 	local wpa_key_mgmt="WPA-PSK"
-	local scan_ssid="1"
+	local scan_ssid="scan_ssid=1"
 	local freq
+
+	[ "$ieee80211r" -gt 0 ] && wpa_key_mgmt="FT-PSK $wpa_key_mgmt"
 
 	[[ "$_w_mode" = "adhoc" ]] && {
 		append network_data "mode=1" "$N$T"
@@ -556,12 +581,25 @@ wpa_supplicant_add_network() {
 			append network_data "frequency=$freq" "$N$T"
 		}
 
-		scan_ssid=0
+		scan_ssid="scan_ssid=0"
 
 		[ "$_w_driver" = "nl80211" ] ||	wpa_key_mgmt="WPA-NONE"
 	}
 
-	[[ "$_w_mode" = adhoc ]] && append network_data "$_w_modestr" "$N$T"
+	[[ "$_w_mode" = "mesh" ]] && {
+		json_get_vars mesh_id
+		ssid="${mesh_id}"
+
+		append network_data "mode=5" "$N$T"
+		[ -n "$channel" ] && {
+			freq="$(get_freq "$phy" "$channel")"
+			append network_data "frequency=$freq" "$N$T"
+		}
+		wpa_key_mgmt="SAE"
+		scan_ssid=""
+	}
+
+	[[ "$_w_mode" = "adhoc" -o "$_w_mode" = "mesh" ]] && append network_data "$_w_modestr" "$N$T"
 
 	case "$auth_type" in
 		none) ;;
@@ -583,6 +621,7 @@ wpa_supplicant_add_network() {
 		;;
 		eap)
 			key_mgmt='WPA-EAP'
+		        [ "$ieee80211r" -gt 0 ] && key_mgmt="FT-EAP $key_mgmt"
 
 			json_get_vars eap_type identity ca_cert
 			[ -n "$ca_cert" ] && append network_data "ca_cert=\"$ca_cert\"" "$N$T"
@@ -594,32 +633,54 @@ wpa_supplicant_add_network() {
 					append network_data "private_key=\"$priv_key\"" "$N$T"
 					append network_data "private_key_passwd=\"$priv_key_pwd\"" "$N$T"
 				;;
-				peap|ttls)
-					json_get_vars auth password
+				fast|peap|ttls)
+					json_get_vars auth password ca_cert2 client_cert2 priv_key2 priv_key2_pwd
 					set_default auth MSCHAPV2
-					append network_data "phase2=\"$auth\"" "$N$T"
-					append network_data "password=\"$password\"" "$N$T"
+
+					if [ "$auth" = "EAP-TLS" ]; then
+						[ -n "$ca_cert2" ] &&
+							append network_data "ca_cert2=\"$ca_cert2\"" "$N$T"
+						append network_data "client_cert2=\"$client_cert2\"" "$N$T"
+						append network_data "private_key2=\"$priv_key2\"" "$N$T"
+						append network_data "private_key2_passwd=\"$priv_key2_pwd\"" "$N$T"
+					else
+						append network_data "password=\"$password\"" "$N$T"
+					fi
+
+					phase2proto="auth="
+					case "$auth" in
+						"auth"*)
+							phase2proto=""
+						;;
+						"EAP-"*)
+							auth="$(echo $auth | cut -b 5- )"
+							[ "$eap_type" = "ttls" ] &&
+								phase2proto="autheap="
+						;;
+					esac
+					append network_data "phase2=\"$phase2proto$auth\"" "$N$T"
 				;;
 			esac
 			append network_data "eap=$(echo $eap_type | tr 'a-z' 'A-Z')" "$N$T"
 		;;
 	esac
 
-	case "$wpa" in
-		1)
-			append network_data "proto=WPA" "$N$T"
-		;;
-		2)
-			append network_data "proto=RSN" "$N$T"
-		;;
-	esac
+	[ "$mode" = mesh ] || {
+		case "$wpa" in
+			1)
+				append network_data "proto=WPA" "$N$T"
+			;;
+			2)
+				append network_data "proto=RSN" "$N$T"
+			;;
+		esac
 
-	case "$ieee80211w" in
-		[012])
-			[ "$wpa" -ge 2 ] && append network_data "ieee80211w=$ieee80211w" "$N$T"
-		;;
-	esac
-
+		case "$ieee80211w" in
+			[012])
+				[ "$wpa" -ge 2 ] && append network_data "ieee80211w=$ieee80211w" "$N$T"
+			;;
+		esac
+	}
 	local beacon_int brates mrate
 	[ -n "$bssid" ] && append network_data "bssid=$bssid" "$N$T"
 	[ -n "$beacon_int" ] && append network_data "beacon_int=$beacon_int" "$N$T"
@@ -651,7 +712,7 @@ wpa_supplicant_add_network() {
 
 	cat >> "$_config" <<EOF
 network={
-	scan_ssid=$scan_ssid
+	$scan_ssid
 	ssid="$ssid"
 	key_mgmt=$key_mgmt
 	$network_data

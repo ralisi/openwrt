@@ -27,8 +27,8 @@ proto_6in4_setup() {
 	local iface="$2"
 	local link="6in4-$cfg"
 
-	local mtu ttl tos ipaddr peeraddr ip6addr ip6prefix tunnelid username password updatekey sourcerouting
-	json_get_vars mtu ttl tos ipaddr peeraddr ip6addr ip6prefix tunnelid username password updatekey sourcerouting
+	local mtu ttl tos ipaddr peeraddr ip6addr ip6prefix tunlink tunnelid username password updatekey
+	json_get_vars mtu ttl tos ipaddr peeraddr ip6addr ip6prefix tunlink tunnelid username password updatekey
 
 	[ -z "$peeraddr" ] && {
 		proto_notify_error "$cfg" "MISSING_ADDRESS"
@@ -36,11 +36,16 @@ proto_6in4_setup() {
 		return
 	}
 
-	( proto_add_host_dependency "$cfg" "$peeraddr" )
+	( proto_add_host_dependency "$cfg" "$peeraddr" "$tunlink" )
 
 	[ -z "$ipaddr" ] && {
-		local wanif
-		if ! network_find_wan wanif || ! network_get_ipaddr ipaddr "$wanif"; then
+		local wanif="$tunlink"
+		if [ -z "$wanif" ] && ! network_find_wan wanif; then
+			proto_notify_error "$cfg" "NO_WAN_LINK"
+			return
+		fi
+
+		if ! network_get_ipaddr ipaddr "$wanif"; then
 			proto_notify_error "$cfg" "NO_WAN_LINK"
 			return
 		fi
@@ -48,21 +53,17 @@ proto_6in4_setup() {
 
 	proto_init_update "$link" 1
 
-	local source=""
-	[ "$sourcerouting" != "0" ] && source="::/128"
-	proto_add_ipv6_route "::" 0 "" "" "" "$source"
-
 	[ -n "$ip6addr" ] && {
 		local local6="${ip6addr%%/*}"
 		local mask6="${ip6addr##*/}"
 		[[ "$local6" = "$mask6" ]] && mask6=
 		proto_add_ipv6_address "$local6" "$mask6"
-		[ "$sourcerouting" != "0" ] && proto_add_ipv6_route "::" 0 "" "" "" "$local6/$mask6"
+		proto_add_ipv6_route "::" 0 "" "" "" "$local6/$mask6"
 	}
 
 	[ -n "$ip6prefix" ] && {
 		proto_add_ipv6_prefix "$ip6prefix"
-		[ "$sourcerouting" != "0" ] && proto_add_ipv6_route "::" 0 "" "" "" "$ip6prefix"
+		proto_add_ipv6_route "::" 0 "" "" "" "$ip6prefix"
 	}
 
 	proto_add_tunnel
@@ -72,6 +73,7 @@ proto_6in4_setup() {
 	[ -n "$tos" ] && json_add_string tos "$tos"
 	json_add_string local "$ipaddr"
 	json_add_string remote "$peeraddr"
+	[ -n "$tunlink" ] && json_add_string link "$tunlink"
 	proto_close_tunnel
 
 	proto_send_update "$cfg"
@@ -80,40 +82,23 @@ proto_6in4_setup() {
 		[ -n "$updatekey" ] && password="$updatekey"
 
 		local http="http"
-		local urlget="wget"
+		local urlget="uclient-fetch"
 		local urlget_opts="-qO-"
 		local ca_path="${SSL_CERT_DIR-/etc/ssl/certs}"
 
-		if [ -n "$(which curl)" ]; then
-			urlget="curl"
-			urlget_opts="-s -S"
-			if curl -V | grep "Protocols:" | grep -qF "https"; then
-				http="https"
-				urlget_opts="$urlget_opts --capath $ca_path"
-			fi
-		fi
-		if [ "$http" = "http" ] &&
-			wget --version 2>&1 | grep -qF "+https"; then
-			urlget="wget"
-			urlget_opts="-qO- --ca-directory=$ca_path"
-			http="https"
-		fi
+		[ -f /lib/libustream-ssl.so ] && http=https
 		[ "$http" = "https" -a -z "$(find $ca_path -name "*.0" 2>/dev/null)" ] && {
-			if [ "$urlget" = "curl" ]; then
-				urlget_opts="$urlget_opts -k"
-			else
-				urlget_opts="$urlget_opts --no-check-certificate"
-			fi
+			urlget_opts="$urlget_opts --no-check-certificate"
 		}
 
-		local url="$http://ipv4.tunnelbroker.net/nic/update?username=$username&password=$password&hostname=$tunnelid"
+		local url="$http://ipv4.tunnelbroker.net/nic/update?hostname=$tunnelid"
 		local try=0
 		local max=3
 
 		(
 			set -o pipefail
 			while [ $((++try)) -le $max ]; do
-				if proto_6in4_update $urlget $urlget_opts "$url" 2>&1 | \
+				if proto_6in4_update $urlget $urlget_opts --user="$username" --password="$password" "$url" 2>&1 | \
 					sed -e 's,^Killed$,timeout,' -e "s,^,update $try/$max: ," | \
 					logger -t "$link";
 				then
@@ -139,6 +124,7 @@ proto_6in4_init_config() {
 	proto_config_add_string "ip6addr"
 	proto_config_add_string "ip6prefix"
 	proto_config_add_string "peeraddr"
+	proto_config_add_string "tunlink"
 	proto_config_add_string "tunnelid"
 	proto_config_add_string "username"
 	proto_config_add_string "password"
@@ -146,7 +132,6 @@ proto_6in4_init_config() {
 	proto_config_add_int "mtu"
 	proto_config_add_int "ttl"
 	proto_config_add_string "tos"
-	proto_config_add_boolean "sourcerouting"
 }
 
 [ -n "$INCLUDE_ONLY" ] || {

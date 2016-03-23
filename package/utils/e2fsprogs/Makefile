@@ -8,15 +8,17 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=e2fsprogs
-PKG_VERSION:=1.42.4
-PKG_MD5SUM:=b6e296f210d642361b7394437ff0f318
-PKG_RELEASE:=2
+PKG_VERSION:=1.42.12
+PKG_MD5SUM:=68255f51be017a93f2f6402fab06c2bf
+PKG_RELEASE:=1
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=@SF/e2fsprogs
 
 PKG_BUILD_DEPENDS:=util-linux
 PKG_INSTALL:=1
+
+PKG_BUILD_PARALLEL:=1
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -91,6 +93,18 @@ $(call Package/e2fsprogs)
   DEPENDS:= +e2fsprogs
 endef
 
+define Package/chattr
+$(call Package/e2fsprogs)
+  TITLE:=Ext2 Filesystem chattr utility
+  DEPENDS:= +e2fsprogs
+endef
+
+define Package/lsattr
+$(call Package/e2fsprogs)
+  TITLE:=Ext2 Filesystem lsattr utility
+  DEPENDS:= +e2fsprogs
+endef
+
 TARGET_CFLAGS += $(FPIC) -ffunction-sections -fdata-sections
 
 CONFIGURE_VARS += \
@@ -112,13 +126,13 @@ define Build/Prepare
 endef
 
 define Build/Compile
-	$(MAKE) -C $(PKG_BUILD_DIR)/util \
+	+$(MAKE) $(PKG_JOBS) -C $(PKG_BUILD_DIR)/util \
 		BUILDCC="$(HOSTCC)" \
 		CFLAGS="" \
 		CPPFLAGS="" \
 		LDFLAGS="" \
 		subst
-	$(MAKE) -C $(PKG_BUILD_DIR) \
+	+$(MAKE) $(PKG_JOBS) -C $(PKG_BUILD_DIR) \
 		LDFLAGS=-Wl,--gc-sections \
 		BUILDCC="$(HOSTCC)" \
 		DESTDIR="$(PKG_INSTALL_DIR)" \
@@ -139,6 +153,10 @@ define Build/InstallDev
 	$(CP) $(PKG_BUILD_DIR)/lib/ext2fs/*.h $(1)/usr/include/ext2fs
 	$(INSTALL_DIR) $(1)/usr/include/et
 	$(CP) $(PKG_BUILD_DIR)/lib/et/*.h $(1)/usr/include/et
+endef
+
+define Package/e2fsprogs/conffiles
+/etc/e2fsck.conf
 endef
 
 define Package/e2fsprogs/install
@@ -213,6 +231,16 @@ define Package/debugfs/install
 	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libss.so.* $(1)/usr/lib/
 endef
 
+define Package/chattr/install
+	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/chattr $(1)/usr/bin/
+endef
+
+define Package/lsattr/install
+	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/lsattr $(1)/usr/bin/
+endef
+
 $(eval $(call BuildPackage,e2fsprogs))
 $(eval $(call BuildPackage,libext2fs))
 $(eval $(call BuildPackage,tune2fs))
@@ -222,3 +250,5 @@ $(eval $(call BuildPackage,dumpe2fs))
 $(eval $(call BuildPackage,e2freefrag))
 $(eval $(call BuildPackage,filefrag))
 $(eval $(call BuildPackage,debugfs))
+$(eval $(call BuildPackage,chattr))
+$(eval $(call BuildPackage,lsattr))

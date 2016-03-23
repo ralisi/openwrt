@@ -8,13 +8,13 @@ include $(TOPDIR)/rules.mk
 
 ARCH:=arm
 BOARD:=mvebu
-BOARDNAME:=Marvell Armada XP/370
+BOARDNAME:=Marvell Armada 37x/38x/XP
 FEATURES:=usb pci pcie gpio nand squashfs
 CPU_TYPE:=cortex-a9
 CPU_SUBTYPE:=vfpv3
 MAINTAINER:=Imre Kaloz <kaloz@openwrt.org>
 
-KERNEL_PATCHVER:=3.18
+KERNEL_PATCHVER:=4.1
 
 include $(INCLUDE_DIR)/target.mk
 

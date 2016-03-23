@@ -1,4 +1,4 @@
-# 
+#
 # Copyright (C) 2006 OpenWrt.org
 #
 # This is free software, licensed under the GNU General Public License v2.
@@ -17,6 +17,7 @@ define Package/Default
   CONFIGFILE:=
   SECTION:=opt
   CATEGORY:=Extra packages
+  PACKAGE_SUBDIR:=$(FEED)
   DEPENDS:=
   MDEPENDS:=
   CONFLICTS:=
